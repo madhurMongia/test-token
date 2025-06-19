@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { TestToken, TestToken__factory } from '@/typechain-types';
+import { TestToken, TestToken__factory } from '@contract/typechain-types';
 import { config } from './config';
 
 // Initialize provider

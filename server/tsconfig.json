@@ -3,9 +3,9 @@
   "compilerOptions": {
     "outDir": "./dist",
     "composite": true,
+    "baseUrl": "./src",
     "paths": {
-      "@/typechain-types/*": ["../contract/typechain-types/*"],
-      "@/artifacts/*": ["../contract/artifacts/*"]
+      "@contract/*": ["../../contract/*"]
     }
   },
   "include": ["src/**/*"],

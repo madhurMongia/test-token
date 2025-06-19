@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TestToken Burn (Meta-Tx)</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    input { padding: 0.4rem; margin: 0.4rem 0; width: 250px; }
+    button { padding: 0.5rem 1rem; margin-top: 1rem; }
+    #log { margin-top: 1rem; white-space: pre-wrap; }
+  </style>
+</head>
+<body style="background-color: black; color: white;">
+  <h1>Burn TestToken (Gasless)</h1>
+
+  <div>
+    <button id="connect">Connect Wallet</button>
+    <span id="address"></span>
+  </div>
+
+  <label>
+    Amount to burn (STT):<br />
+    <input type="number" id="amount" placeholder="e.g. 10" min="0" step="any" />
+  </label><br />
+
+  <label>
+    Deadline (unix timestamp):<br />
+    <input type="number" id="deadline" />
+  </label><br />
+
+  <button id="setDeadline">Set Deadline (+1 hour)</button><br />
+
+  <button id="sign">Sign &amp; Send</button>
+
+  <div id="log"></div>
+
+<script>
+(async () => {
+  if (typeof window.ethereum === 'undefined') {
+    alert('Please install MetaMask!');
+    return;
+  }
+
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  let signer;
+  let userAddress;
+
+  // ======== CONFIG ========
+  const backendUrl = 'http://localhost:4000'; // change if backend runs elsewhere
+  const contractAddress = '0xc8f803b8F7002a74AC9B94FB6EEfA1BfE3d87bc8'; // update after deployment
+  const tokenAbi = [
+    'function nonces(address) view returns (uint256)'
+  ];
+  let token;
+  const NAME = 'TestToken';
+  const VERSION = '1';
+  // =========================
+
+  const connectBtn = document.getElementById('connect');
+  const signBtn    = document.getElementById('sign');
+  const deadlineBtn = document.getElementById('setDeadline');
+  const addrSpan   = document.getElementById('address');
+  const logDiv     = document.getElementById('log');
+
+  function log(msg) {
+    console.log(msg);
+    logDiv.textContent += `\n${msg}`;
+  }
+
+  deadlineBtn.onclick = () => {
+    const deadline = Math.floor(Date.now() / 1000) + 3600; // +1 hour
+    document.getElementById('deadline').value = deadline.toString();
+    log(`Deadline set to: ${deadline} (${new Date(deadline * 1000).toLocaleString()})`);
+  };
+
+  connectBtn.onclick = async () => {
+    try {
+      await provider.send('eth_requestAccounts', []);
+      signer = await provider.getSigner();
+      // Get address directly from accounts to avoid ENS lookup
+      const accounts = await provider.send('eth_accounts', []);
+      userAddress = accounts[0];
+      addrSpan.textContent = userAddress;
+      
+      // Initialize contract with signer
+      token = new ethers.Contract(contractAddress, tokenAbi, provider);
+      
+      // Check balance (only if contract address is set)
+      if (contractAddress !== 'REPLACE_WITH_CONTRACT_ADDRESS') {
+        try {
+          const balanceRes = await fetch(`${backendUrl}/api/balance/${userAddress}`);
+          const balanceData = await balanceRes.json();
+          
+          if (balanceRes.ok) {
+            log(`Wallet connected: ${userAddress}`);
+            log(`Token balance: ${balanceData.balance} STT`);
+          } else {
+            log(`Wallet connected: ${userAddress}`);
+            log(`Could not fetch balance: ${balanceData.error}`);
+          }
+        } catch (balanceErr) {
+          log(`Wallet connected: ${userAddress}`);
+          log(`Could not fetch balance: ${balanceErr.message}`);
+        }
+      } else {
+        log(`Wallet connected: ${userAddress}`);
+        log('Update contract address to check balance');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to connect wallet: ' + err.message);
+    }
+  };
+
+  signBtn.onclick = async () => {
+    if (!signer) { alert('Connect wallet first'); return; }
+    if (contractAddress === 'REPLACE_WITH_CONTRACT_ADDRESS') {
+      alert('Please update the contract address in the code');
+      return;
+    }
+
+    const amountRaw = document.getElementById('amount').value;
+    const deadline  = parseInt(document.getElementById('deadline').value || '0', 10);
+    if (!amountRaw || !deadline) { alert('Amount and deadline required'); return; }
+
+    try {
+      const chainId = (await provider.getNetwork()).chainId;
+      const nonce   = await token.nonces(userAddress);
+      const amount  = ethers.parseEther(amountRaw.toString());
+
+      log(`Preparing signature...`);
+      log(`Chain ID: ${chainId}`);
+      log(`Nonce: ${nonce}`);
+      log(`Amount: ${ethers.formatEther(amount)} STT`);
+      log(`Deadline: ${deadline} (${new Date(deadline * 1000).toLocaleString()})`);
+
+      // EIP-712 domain & types
+      const domain = { name: NAME, version: VERSION, chainId, verifyingContract: contractAddress };
+      const types  = {
+        Burn: [
+          { name: 'from',    type: 'address' },
+          { name: 'amount',  type: 'uint256' },
+          { name: 'nonce',   type: 'uint256' },
+          { name: 'deadline',type: 'uint256' },
+        ],
+      };
+      const value = { from: userAddress, amount, nonce, deadline };
+
+      // Sign typed data
+      log('Requesting signature from wallet...');
+      const signature = await signer.signTypedData(domain, types, value);
+      const sig = ethers.Signature.from(signature);
+      const { v, r, s } = sig;
+
+      log(`Signature v:${v} r:${r} s:${s}`);
+
+      // Send to backend
+      log('Sending to backend...');
+      const res = await fetch(backendUrl + '/api/burn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: userAddress, amount: amountRaw, deadline, v, r, s }),
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        log('✅ Success!');
+      } else {
+        log('❌ Error from backend:');
+      }
+      log(JSON.stringify(data, null, 2));
+    } catch (err) {
+      console.error(err);
+      log('❌ Error: ' + err.message);
+      alert(err.message || err);
+    }
+  };
+})();
+</script>
+
+</body>
+</html> 
