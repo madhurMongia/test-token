@@ -22,7 +22,17 @@ export const setupMiddleware = (app: express.Application) => {
     
     const originalSend = res.send;
     res.send = function(data) {
-      console.log(`[${timestamp}] Response: ${res.statusCode} ${res.statusMessage}`);
+      console.log(`[${timestamp}] Response: ${res.statusCode} ${res.statusMessage || 'OK'}`);
+      
+      // Log response body (truncate if too long)
+      if (data) {
+        const responseStr = typeof data === 'string' ? data : JSON.stringify(data);
+        const truncatedResponse = responseStr.length > 500 
+          ? responseStr.substring(0, 500) + '...' 
+          : responseStr;
+        console.log(`[${timestamp}] Response Body:`, truncatedResponse);
+      }
+      
       return originalSend.call(this, data);
     };
     
