@@ -1,34 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/Nonces.sol";
+
 /**
  * @title TestToken
  * @dev Simple token implementation
  * Only owner can mint tokens, but anyone can burn their own tokens
  */
-contract TestToken {
+contract TestToken is Ownable, EIP712, Nonces {
     // Token metadata
     string public constant name = "TestToken";
     string public constant symbol = "STT";
     uint8 public constant decimals = 18;
     
-    // Owner of the contract
-    address public owner;
-    
     // Mapping to store balances
     mapping(address => uint256) private _balances;
     
-    // Modifier
-    modifier onlyOwner() {
-        require(msg.sender == owner, "TestToken: caller is not the owner");
-        _;
-    }
+    bytes32 private constant _BURN_TYPEHASH = keccak256("Burn(address from,uint256 amount,uint256 nonce,uint256 deadline)");
     
     /**
      * @dev Constructor that sets the initial owner and mints initial supply
      */
-    constructor() {
-        owner = msg.sender;
+    constructor() Ownable(msg.sender) EIP712("TestToken", "1") {
         // Mint 1000 tokens to the contract deployer
         _balances[msg.sender] = 1000 * 10**decimals;
     }
@@ -66,5 +63,37 @@ contract TestToken {
     function burn(uint256 amount) public {
         require(_balances[msg.sender] >= amount, "TestToken: burn amount exceeds balance");
         _balances[msg.sender] -= amount;
+    }
+    
+    /**
+     * @dev Burn tokens using an EIP-712 signature (meta-transaction).
+     * The relayer pays gas; signer authorises the burn.
+     */
+    function burnWithSig(
+        address from,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external {
+        require(block.timestamp <= deadline, "TestToken: signature expired");
+
+        bytes32 structHash = keccak256(
+            abi.encode(
+                _BURN_TYPEHASH,
+                from,
+                amount,
+                _useNonce(from),
+                deadline
+            )
+        );
+
+        bytes32 digest = _hashTypedDataV4(structHash);
+        address signer = ECDSA.recover(digest, v, r, s);
+        require(signer == from, "TestToken: invalid signature");
+
+        require(_balances[from] >= amount, "TestToken: burn amount exceeds balance");
+        _balances[from] -= amount;
     }
 } 

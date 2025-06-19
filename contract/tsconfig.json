@@ -2,8 +2,8 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "outDir": "dist",
-    "rootDir": "."
+    "outDir": "dist"
   },
+  "include": ["typechain-types/**/*"],
   "exclude": ["node_modules"]
 }

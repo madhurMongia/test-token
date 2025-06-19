@@ -1,0 +1,12 @@
+node_modules
+*/.env
+
+# Hardhat files
+*/cache
+*/artifacts
+
+*/dist
+
+# solidity-coverage files
+*/coverage
+*/coverage.json

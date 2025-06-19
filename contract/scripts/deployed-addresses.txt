@@ -1,0 +1,4 @@
+TestToken Contract Deployment Address:
+0xc8f803b8F7002a74AC9B94FB6EEfA1BfE3d87bc8
+
+Network: Sepolia

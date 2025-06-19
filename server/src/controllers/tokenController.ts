@@ -54,9 +54,7 @@ export class TokenController {
       
       res.json({
         message: 'Tokens minted successfully',
-        transactionHash: tx.hash,
-        to,
-        amount: Number(amount)
+        transactionHash: tx.hash
       });
     } catch (error: any) {
       console.error('Error minting tokens:', error);
@@ -64,33 +62,44 @@ export class TokenController {
     }
   }
 
-  // Burn tokens from the owner's balance
+  /**
+   * Burn tokens.
+   * Meta-transaction burn: body must contain { from, amount, deadline, v, r, s }.
+   * The backend (relayer) submits burnWithSig so the user pays no gas.
+   */
   static async burnTokens(req: Request, res: Response): Promise<void> {
     try {
-      const { amount } = req.body;
-      
-      // Validate input
-      if (!amount) {
-        res.status(400).json({ error: 'Missing required field: amount' });
+      const { from, amount, deadline, v, r, s } = req.body;
+
+      // Validate presence of all meta-tx fields
+      if (!from || !amount || !deadline || v === undefined || !r || !s) {
+        res.status(400).json({ error: 'Missing required fields: from, amount, deadline, v, r, s' });
         return;
       }
-      
+
+      // Validate amount value
       if (amount <= 0) {
         res.status(400).json({ error: 'Amount must be greater than 0' });
         return;
       }
-      
+
+      // Ensure from address is valid
+      if (!isValidAddress(from)) {
+        res.status(400).json({ error: 'Invalid from address' });
+        return;
+      }
+
       // Convert amount to wei
       const amountWei = parseAmount(amount);
-      
-      // Execute burn transaction
-      const tx = await token.burn(amountWei);
-      await tx.wait(); // Wait for transaction to be mined
-      
+
+      // Execute meta-tx burn
+      const tx = await (token as any).burnWithSig(from, amountWei, BigInt(deadline), v, r, s);
+
+      await tx.wait();
+
       res.json({
         message: 'Tokens burned successfully',
-        transactionHash: tx.hash,
-        amount: Number(amount)
+        transactionHash: tx.hash
       });
     } catch (error: any) {
       console.error('Error burning tokens:', error);

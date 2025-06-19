@@ -9,7 +9,7 @@ router.get('/balance/:address', TokenController.getBalance);
 // POST /mint - Mint tokens to an address (owner only)
 router.post('/mint', TokenController.mintTokens);
 
-// POST /burn - Burn tokens from the owner's balance
+// POST /burn - Burn tokens via meta-transaction (gasless)
 router.post('/burn', TokenController.burnTokens);
 
 export default router; 

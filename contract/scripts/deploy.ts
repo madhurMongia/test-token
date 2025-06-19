@@ -8,7 +8,7 @@ async function main() {
   console.log("Deploying with account:", deployer.address);
   
   // Get account balance
-  const balance = await ethers.provider.getBalance(deployer.address);
+  const balance = await deployer.provider.getBalance(deployer.address);
   console.log("Account balance:", ethers.formatEther(balance), "ETH");
 
   // Deploy the contract
