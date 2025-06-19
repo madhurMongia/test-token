@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 /**
  * @title TestToken
- * @dev Simple token implementation with only required functionality
+ * @dev Simple token implementation
  * Only owner can mint tokens, but anyone can burn their own tokens
  */
 contract TestToken {
